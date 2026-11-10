@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
-import { Board } from './Board';
+import { ChessBoard } from './ChessBoard';
 
 type Side = 'w' | 'b';
 
@@ -74,6 +74,7 @@ export function Puzzles() {
   const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
   const [message, setMessage] = useState('');
   const [state, setState] = useState<'loading' | 'playing' | 'solved' | 'revealed'>('loading');
+  const [wrong, setWrong] = useState(false);
 
   const chessRef = useRef(new Chess());
   const step = useRef(1);
@@ -168,6 +169,7 @@ export function Puzzles() {
     setFen(p.fen);
     setLastMove(null);
     setMessage('');
+    setWrong(false);
     setState('loading');
 
     const t = token.current;
@@ -197,8 +199,8 @@ export function Puzzles() {
     }
   }
 
-  function handleMove(from: string, to: string, promotion?: string) {
-    if (!puzzle || state !== 'playing') return;
+  function handleMove(from: string, to: string, promotion?: string): boolean {
+    if (!puzzle || state !== 'playing') return false;
     const uci = from + to + (promotion ?? '');
     const expected = puzzle.moves[step.current];
 
@@ -209,7 +211,7 @@ export function Puzzles() {
       probe.move({ from, to, promotion });
       mates = probe.isCheckmate();
     } catch {
-      return;
+      return false;
     }
 
     if (uci !== expected && !mates) {
@@ -219,14 +221,16 @@ export function Puzzles() {
         setLevel((l) => Math.max(MIN_LEVEL, l - LEVEL_STEP));
       }
       setMessage('Not the best move. Try again.');
-      return;
+      setWrong(true);
+      return false;
     }
+    setWrong(false);
 
     applyUci(uci);
     step.current++;
     if (mates || step.current >= puzzle.moves.length) {
       finish(true);
-      return;
+      return true;
     }
     setMessage('Good. Keep going…');
     const t = token.current;
@@ -236,6 +240,7 @@ export function Puzzles() {
       step.current++;
       setMessage('Your move');
     }, 450);
+    return true;
   }
 
   function showSolution() {
@@ -270,27 +275,42 @@ export function Puzzles() {
   );
 
   if (loadError) return <p className="error" role="alert">{loadError}</p>;
-  if (!puzzles) return <p>Loading puzzles…</p>;
+  if (!puzzles) return <p className="muted pad">Loading puzzles…</p>;
+
+  const tone = state === 'solved' && !failed.current ? 'good' : wrong ? 'bad' : '';
 
   return (
-    <div className="layout">
-      <section>
-        <Board
-          fen={fen || new Chess().fen()}
-          orientation={userColor}
-          lastMove={lastMove}
-          disabled={state !== 'playing'}
-          onMove={handleMove}
-        />
-        <p className="status" aria-live="polite">{message}</p>
+    <div className="play">
+      <section className="board-col">
+        <div className="board-holder">
+          <ChessBoard
+            fen={fen || new Chess().fen()}
+            orientation={userColor}
+            movable={state === 'playing' ? userColor : null}
+            onMove={handleMove}
+            lastMove={lastMove}
+          />
+        </div>
       </section>
 
-      <aside>
-        <div className="controls">
-          <label>
-            Theme
+      <aside className="panel">
+        <header className="panel-head">
+          <h2>Puzzles</h2>
+          <span className="pill">Level {level}</span>
+        </header>
+        <div className="panel-body">
+          <div className={`prompt ${tone}`} aria-live="polite">
+            <span className={`swatch ${userColor}`} />
+            <div>
+              <strong>{message || 'Loading…'}</strong>
+              {puzzle && state !== 'loading' && <div className="muted">Puzzle rated ~{puzzle.rating}</div>}
+            </div>
+          </div>
+
+          <label className="field">
+            <span className="label">Theme</span>
             <select value={theme} onChange={(e) => setTheme(e.target.value)}>
-              <option value="all">Any</option>
+              <option value="all">Any theme</option>
               {Object.keys(themeCounts)
                 .sort((a, b) => THEME_LABELS[a].localeCompare(THEME_LABELS[b]))
                 .map((t) => (
@@ -300,36 +320,44 @@ export function Puzzles() {
                 ))}
             </select>
           </label>
-          <div>
-            Puzzle level: <strong>{level}</strong>
-            {puzzle && state !== 'loading' && <span className="hint"> · this puzzle ~{puzzle.rating}</span>}
+
+          <div className="card">
+            <p className="label">Your weakest themes</p>
+            {weakest.length === 0 ? (
+              <p className="hint">Solve a few puzzles per theme to see this.</p>
+            ) : (
+              <ul className="bars">
+                {weakest.map((w) => (
+                  <li key={w.t}>
+                    <span>{THEME_LABELS[w.t]}</span>
+                    <span className="bar">
+                      <span style={{ width: `${(w.solved / w.n) * 100}%` }} />
+                    </span>
+                    <span className="muted">
+                      {w.solved}/{w.n}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <p className="hint">
-            Level moves up when you solve a puzzle on the first try and down when you miss. It only
-            picks puzzles near your level. It is not a chess rating.
+            Level goes up when you solve on the first try and down when you miss. It picks puzzles
+            near your level and is not a chess rating.
           </p>
-          {state === 'playing' && <button onClick={showSolution}>Show solution</button>}
+        </div>
+        <footer className="panel-foot row">
+          {state === 'playing' && (
+            <button className="btn" onClick={showSolution}>
+              Show solution
+            </button>
+          )}
           {(state === 'solved' || state === 'revealed' || failed.current) && (
-            <button className="primary" onClick={nextPuzzle}>
+            <button className="btn primary" onClick={nextPuzzle}>
               Next puzzle
             </button>
           )}
-        </div>
-
-        <div className="summary">
-          <strong>Your weakest themes</strong>
-          {weakest.length === 0 ? (
-            <p className="hint">Solve a few puzzles per theme to see this.</p>
-          ) : (
-            <ul>
-              {weakest.map((w) => (
-                <li key={w.t}>
-                  {THEME_LABELS[w.t]}: {w.solved}/{w.n} solved
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        </footer>
       </aside>
     </div>
   );

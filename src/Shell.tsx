@@ -5,36 +5,40 @@ import { MyMistakes } from './components/MyMistakes';
 
 type Tab = 'play' | 'puzzles' | 'mistakes';
 
+const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: 'play', label: 'Play', icon: '♟' },
+  { id: 'puzzles', label: 'Puzzles', icon: '🧩' },
+  { id: 'mistakes', label: 'My mistakes', icon: '↻' },
+];
+
 export function Shell() {
   const [tab, setTab] = useState<Tab>('play');
   return (
-    <>
-      <nav className="tabs" aria-label="Sections">
-        <strong className="brand">ChessGuide</strong>
-        <button aria-current={tab === 'play'} onClick={() => setTab('play')}>
-          Play
-        </button>
-        <button aria-current={tab === 'puzzles'} onClick={() => setTab('puzzles')}>
-          Puzzles
-        </button>
-        <button aria-current={tab === 'mistakes'} onClick={() => setTab('mistakes')}>
-          My mistakes
-        </button>
+    <div className="shell">
+      <nav className="sidebar" aria-label="Sections">
+        <div className="brand">
+          <span className="logo" aria-hidden="true">
+            ♞
+          </span>
+          <span>ChessGuide</span>
+        </div>
+        {TABS.map((t) => (
+          <button key={t.id} className="nav-item" aria-current={tab === t.id} onClick={() => setTab(t.id)}>
+            <span className="nav-icon" aria-hidden="true">
+              {t.icon}
+            </span>
+            <span>{t.label}</span>
+          </button>
+        ))}
       </nav>
-      {/* Keep the game mounted while on the puzzles tab so it isn't lost. */}
-      <div hidden={tab !== 'play'}>
-        <App />
-      </div>
-      {tab === 'puzzles' && (
-        <main className="app">
-          <Puzzles />
-        </main>
-      )}
-      {tab === 'mistakes' && (
-        <main className="app">
-          <MyMistakes />
-        </main>
-      )}
-    </>
+      <main className="content">
+        {/* Keep the game mounted on other tabs so it isn't lost. */}
+        <div hidden={tab !== 'play'}>
+          <App onOpenMistakes={() => setTab('mistakes')} />
+        </div>
+        {tab === 'puzzles' && <Puzzles />}
+        {tab === 'mistakes' && <MyMistakes />}
+      </main>
+    </div>
   );
 }

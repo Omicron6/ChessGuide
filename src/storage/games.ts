@@ -6,6 +6,7 @@ export interface PlyRecord {
   uci: string;
   by: 'me' | 'bot';
   fenBefore: string;
+  fenAfter: string;
   grade?: Grade;
   loss?: number; // win-probability points lost (my moves only)
   bestUci?: string | null;
