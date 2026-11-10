@@ -249,11 +249,6 @@ export function App() {
 
   return (
     <main className="app">
-      <header>
-        <h1>ChessGuide</h1>
-        <p className="sub">Play the bot. Get feedback on your moves.</p>
-      </header>
-
       {engineError && (
         <p className="error" role="alert">
           {engineError} Run <code>npm run copy-engine</code> and reload.
